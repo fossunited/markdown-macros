@@ -44,6 +44,7 @@ print(html)
 ```
 """
 import re
+import importlib
 
 from markdown import Extension
 from markdown.inlinepatterns import InlineProcessor
@@ -66,10 +67,28 @@ class MacroExtension(Extension):
 
     def extendMarkdown(self, md):
         self.md = md
-        config = self.getConfigs()
-        pattern = MacroInlineProcessor(MACRO_RE, config['registry'])
+        pattern = MacroInlineProcessor(MACRO_RE, self.get_registry())
         pattern.md = md
         md.inlinePatterns.register(pattern, 'macro', 75)
+
+    def get_registry(self):
+        config = self.getConfigs()
+        def process_value(value):
+            if isinstance(value, str):
+                return self.load_function(value)
+            else:
+                return value
+        return {k: process_value(v) for k, v in config['registry'].items()}
+
+    def load_function(self, qualified_name):
+        """Loads a function from its name.
+
+            >>> load_function("os.path:exists")
+            <function exists at 0x10ab3dd40>
+        """
+        modname, funcname = qualified_name.split(":", 1)
+        mod = importlib.import_module(modname)
+        return getattr(mod, funcname)
 
 class MacroInlineProcessor(InlineProcessor):
     """MacroInlineProcessor is class that is handles the logic
